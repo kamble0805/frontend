@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dispatchesAPI, exceptionsAPI } from '../services/api';
 import { Truck, Package, AlertTriangle, Clock, CheckCircle, MapPin } from 'lucide-react';
+import ImageUpload from './ImageUpload';
 import './Dashboard.css';
 
 const OperatorDashboard = () => {
@@ -12,6 +13,10 @@ const OperatorDashboard = () => {
   const [activeTab, setActiveTab] = useState('dispatches');
   const [selectedDispatch, setSelectedDispatch] = useState(null);
   const [showExceptionModal, setShowExceptionModal] = useState(false);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [workflowStep, setWorkflowStep] = useState('');
+  const [workflowData, setWorkflowData] = useState({});
+  const [workflowImages, setWorkflowImages] = useState([]);
   const [exceptionForm, setExceptionForm] = useState({
     description: '',
     exception_type: 'General'
@@ -42,12 +47,62 @@ const OperatorDashboard = () => {
     logout();
   };
 
+  const openWorkflowModal = (dispatch, step) => {
+    setSelectedDispatch(dispatch);
+    setWorkflowStep(step);
+    setWorkflowData({});
+    setWorkflowImages([]);
+    setShowWorkflowModal(true);
+  };
+
+  const closeWorkflowModal = () => {
+    setShowWorkflowModal(false);
+    setSelectedDispatch(null);
+    setWorkflowStep('');
+    setWorkflowData({});
+    setWorkflowImages([]);
+  };
+
+  const executeWorkflowStep = async () => {
+    try {
+      let result;
+      const dataWithImages = { ...workflowData, images: workflowImages };
+      
+      switch (workflowStep) {
+        case 'start_journey':
+          result = await dispatchesAPI.startJourney(selectedDispatch.id);
+          break;
+        case 'weigh_in':
+          result = await dispatchesAPI.weighIn(selectedDispatch.id, dataWithImages);
+          break;
+        case 'unload':
+          result = await dispatchesAPI.unload(selectedDispatch.id, dataWithImages);
+          break;
+        case 'weigh_out':
+          result = await dispatchesAPI.weighOut(selectedDispatch.id, dataWithImages);
+          break;
+        case 'complete_job':
+          result = await dispatchesAPI.completeJob(selectedDispatch.id);
+          break;
+        default:
+          throw new Error('Invalid workflow step');
+      }
+      
+      window.alert(`${workflowStep.replace('_', ' ').toUpperCase()} completed successfully!`);
+      closeWorkflowModal();
+      loadOperatorData();
+    } catch (error) {
+      console.error('Error executing workflow step:', error);
+      window.alert(`Failed to execute ${workflowStep.replace('_', ' ')}`);
+    }
+  };
+
   const updateDispatchStatus = async (dispatchId, newStatus) => {
     try {
       await dispatchesAPI.updateStatus(dispatchId, newStatus);
       
       // Show workflow notifications
-      if (newStatus === 'in_progress') {
+      if (newStatus === 'in_transit') {
         window.alert('Dispatch started! Truck is now in transit and order is in progress.');
       } else if (newStatus === 'completed') {
         window.alert('Dispatch completed! Order is completed, stock updated, and truck returned to idle.');
@@ -282,29 +337,53 @@ const OperatorDashboard = () => {
                         {dispatch.status === 'assigned' && (
                           <button 
                             className="action-button start"
-                            onClick={() => updateDispatchStatus(dispatch.id, 'in_progress')}
+                            onClick={() => openWorkflowModal(dispatch, 'start_journey')}
                           >
-                            Start
+                            Start Journey
                           </button>
                         )}
-                        {dispatch.status === 'in_progress' && (
-                          <>
-                            <button 
-                              className="action-button complete"
-                              onClick={() => updateDispatchStatus(dispatch.id, 'completed')}
-                            >
-                              Complete
-                            </button>
-                            <button 
-                              className="action-button report"
-                              onClick={() => {
-                                setSelectedDispatch(dispatch);
-                                setShowExceptionModal(true);
-                              }}
-                            >
-                              Report Issue
-                            </button>
-                          </>
+                        {dispatch.status === 'in_transit' && (
+                          <button 
+                            className="action-button weigh"
+                            onClick={() => openWorkflowModal(dispatch, 'weigh_in')}
+                          >
+                            Weigh In
+                          </button>
+                        )}
+                        {dispatch.status === 'weigh_in' && (
+                          <button 
+                            className="action-button unload"
+                            onClick={() => openWorkflowModal(dispatch, 'unload')}
+                          >
+                            Unload
+                          </button>
+                        )}
+                        {dispatch.status === 'unload' && (
+                          <button 
+                            className="action-button weigh"
+                            onClick={() => openWorkflowModal(dispatch, 'weigh_out')}
+                          >
+                            Weigh Out
+                          </button>
+                        )}
+                        {dispatch.status === 'weigh_out' && (
+                          <button 
+                            className="action-button complete"
+                            onClick={() => openWorkflowModal(dispatch, 'complete_job')}
+                          >
+                            Complete Job
+                          </button>
+                        )}
+                        {dispatch.status !== 'completed' && dispatch.status !== 'cancelled' && (
+                          <button 
+                            className="action-button report"
+                            onClick={() => {
+                              setSelectedDispatch(dispatch);
+                              setShowExceptionModal(true);
+                            }}
+                          >
+                            Report Issue
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -365,6 +444,93 @@ const OperatorDashboard = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Workflow Modal */}
+        {showWorkflowModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>{workflowStep.replace('_', ' ').toUpperCase()}</h3>
+                <button 
+                  className="modal-close"
+                  onClick={closeWorkflowModal}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Dispatch Details:</label>
+                  <p><strong>Dispatch #{selectedDispatch?.id}</strong></p>
+                  <p>Truck: {selectedDispatch?.truck_number_plate}</p>
+                  <p>Order: {selectedDispatch?.order_material} - {selectedDispatch?.order_quantity} tons</p>
+                  <p>Customer: {selectedDispatch?.order_customer}</p>
+                </div>
+                
+                {workflowStep === 'weigh_in' && (
+                  <div className="form-group">
+                    <label>Gross Weight (tons):</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={workflowData.gross_weight || ''}
+                      onChange={(e) => setWorkflowData({...workflowData, gross_weight: parseFloat(e.target.value)})}
+                      className="form-input"
+                      required
+                    />
+                  </div>
+                )}
+                
+                {workflowStep === 'weigh_out' && (
+                  <div className="form-group">
+                    <label>Tare Weight (tons):</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={workflowData.tare_weight || ''}
+                      onChange={(e) => setWorkflowData({...workflowData, tare_weight: parseFloat(e.target.value)})}
+                      className="form-input"
+                      required
+                    />
+                  </div>
+                )}
+                
+                {(workflowStep === 'weigh_in' || workflowStep === 'unload' || workflowStep === 'weigh_out') && (
+                  <div className="form-group">
+                    <ImageUpload
+                      onImagesChange={setWorkflowImages}
+                      maxImages={3}
+                      mediaType={workflowStep}
+                      description={`Upload proof images for ${workflowStep.replace('_', ' ')}`}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button 
+                  className="action-button cancel"
+                  onClick={closeWorkflowModal}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="action-button submit"
+                  onClick={executeWorkflowStep}
+                  disabled={
+                    (workflowStep === 'weigh_in' && !workflowData.gross_weight) ||
+                    (workflowStep === 'weigh_out' && !workflowData.tare_weight)
+                  }
+                >
+                  {workflowStep === 'start_journey' && 'Start Journey'}
+                  {workflowStep === 'weigh_in' && 'Record Weigh In'}
+                  {workflowStep === 'unload' && 'Confirm Unload'}
+                  {workflowStep === 'weigh_out' && 'Record Weigh Out'}
+                  {workflowStep === 'complete_job' && 'Complete Job'}
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 // Create axios instance
 const api = axios.create({
@@ -224,6 +224,158 @@ export const dispatchesAPI = {
     const response = await api.post(`/dispatches/${id}/assign_operator/`, { operator_id: operatorId });
     return response.data;
   },
+
+  // Workflow step methods
+  startJourney: async (id) => {
+    const response = await api.post(`/dispatches/${id}/start_journey/`);
+    return response.data;
+  },
+
+  weighIn: async (id, data) => {
+    const formData = new FormData();
+    
+    // Add text data
+    Object.keys(data).forEach(key => {
+      if (key !== 'images') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    // Add images
+    if (data.images && data.images.length > 0) {
+      data.images.forEach(image => {
+        formData.append('images', image);
+      });
+    }
+    
+    const response = await api.post(`/dispatches/${id}/weigh_in/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  unload: async (id, data = {}) => {
+    const formData = new FormData();
+    
+    // Add text data
+    Object.keys(data).forEach(key => {
+      if (key !== 'images') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    // Add images
+    if (data.images && data.images.length > 0) {
+      data.images.forEach(image => {
+        formData.append('images', image);
+      });
+    }
+    
+    const response = await api.post(`/dispatches/${id}/unload/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  weighOut: async (id, data) => {
+    const formData = new FormData();
+    
+    // Add text data
+    Object.keys(data).forEach(key => {
+      if (key !== 'images') {
+        formData.append(key, data[key]);
+      }
+    });
+    
+    // Add images
+    if (data.images && data.images.length > 0) {
+      data.images.forEach(image => {
+        formData.append('images', image);
+      });
+    }
+    
+    const response = await api.post(`/dispatches/${id}/weigh_out/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  completeJob: async (id) => {
+    const response = await api.post(`/dispatches/${id}/complete_job/`);
+    return response.data;
+  },
+
+  uploadImages: async (id, data) => {
+    const formData = new FormData();
+    
+    // Add images
+    if (data.images && data.images.length > 0) {
+      data.images.forEach(image => {
+        formData.append('images', image);
+      });
+    }
+    
+    // Add other data
+    if (data.media_type) formData.append('media_type', data.media_type);
+    if (data.description) formData.append('description', data.description);
+    
+    const response = await api.post(`/dispatches/${id}/upload_images/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+};
+
+// Dispatch Media API
+export const dispatchMediaAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/dispatch-media/', { params });
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/dispatch-media/${id}/`);
+    return response.data;
+  },
+
+  create: async (data) => {
+    const formData = new FormData();
+    
+    // Add image
+    if (data.image) {
+      formData.append('image', data.image);
+    }
+    
+    // Add other data
+    if (data.dispatch) formData.append('dispatch', data.dispatch);
+    if (data.media_type) formData.append('media_type', data.media_type);
+    if (data.description) formData.append('description', data.description);
+    
+    const response = await api.post('/dispatch-media/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/dispatch-media/${id}/`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/dispatch-media/${id}/`);
+    return response.data;
+  },
 };
 
 // Exceptions API
@@ -245,6 +397,14 @@ export const exceptionsAPI = {
 
   resolve: async (id) => {
     const response = await api.post(`/exceptions/${id}/resolve/`);
+    return response.data;
+  },
+};
+
+// Operators API
+export const operatorsAPI = {
+  getAll: async () => {
+    const response = await api.get('/operators/');
     return response.data;
   },
 };

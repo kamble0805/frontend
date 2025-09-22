@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { dashboardAPI, trucksAPI, customersAPI, ordersAPI, dispatchesAPI, materialsAPI } from '../services/api';
+import { dashboardAPI, trucksAPI, customersAPI, ordersAPI, dispatchesAPI, materialsAPI, operatorsAPI } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Truck, Users, Package, AlertTriangle, Clock, TrendingUp } from 'lucide-react';
+import { Truck, Users, Package, AlertTriangle, Clock, TrendingUp, Eye, Image as ImageIcon } from 'lucide-react';
 import './Dashboard.css';
 
 const AdminDashboard = () => {
@@ -15,7 +15,8 @@ const AdminDashboard = () => {
     customers: [],
     orders: [],
     dispatches: [],
-    materials: []
+    materials: [],
+    operators: []
   });
   
   // Modal states
@@ -24,6 +25,14 @@ const AdminDashboard = () => {
   const [modalEntity, setModalEntity] = useState(''); // 'truck', 'customer', etc.
   const [selectedItem, setSelectedItem] = useState(null);
   const [formData, setFormData] = useState({});
+  
+  // Operator assignment modal
+  const [showOperatorModal, setShowOperatorModal] = useState(false);
+  const [selectedDispatch, setSelectedDispatch] = useState(null);
+  
+  // Dispatch details modal
+  const [showDispatchDetailsModal, setShowDispatchDetailsModal] = useState(false);
+  const [selectedDispatchDetails, setSelectedDispatchDetails] = useState(null);
 
   useEffect(() => {
     loadDashboardData();
@@ -32,13 +41,14 @@ const AdminDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [kpi, trucks, customers, orders, dispatches, materials] = await Promise.all([
+      const [kpi, trucks, customers, orders, dispatches, materials, operators] = await Promise.all([
         dashboardAPI.getKPI(),
         trucksAPI.getAll(),
         customersAPI.getAll(),
         ordersAPI.getAll(),
         dispatchesAPI.getAll(),
-        materialsAPI.getAll()
+        materialsAPI.getAll(),
+        operatorsAPI.getAll()
       ]);
       
       setKpiData(kpi);
@@ -47,7 +57,8 @@ const AdminDashboard = () => {
         customers: customers.results || customers,
         orders: orders.results || orders,
         dispatches: dispatches.results || dispatches,
-        materials: materials.results || materials
+        materials: materials.results || materials,
+        operators: operators.results || operators
       });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
@@ -160,10 +171,31 @@ const AdminDashboard = () => {
     }
   };
 
-  const assignDispatchOperator = async (dispatchId, operatorId) => {
+  const openOperatorModal = (dispatch) => {
+    setSelectedDispatch(dispatch);
+    setShowOperatorModal(true);
+  };
+
+  const closeOperatorModal = () => {
+    setShowOperatorModal(false);
+    setSelectedDispatch(null);
+  };
+
+  const openDispatchDetailsModal = (dispatch) => {
+    setSelectedDispatchDetails(dispatch);
+    setShowDispatchDetailsModal(true);
+  };
+
+  const closeDispatchDetailsModal = () => {
+    setShowDispatchDetailsModal(false);
+    setSelectedDispatchDetails(null);
+  };
+
+  const assignDispatchOperator = async (operatorId) => {
     try {
-      await dispatchesAPI.assignOperator(dispatchId, operatorId);
+      await dispatchesAPI.assignOperator(selectedDispatch.id, operatorId);
       window.alert('Operator assigned successfully!');
+      closeOperatorModal();
       loadDashboardData();
     } catch (error) {
       console.error('Error assigning operator:', error);
@@ -258,6 +290,12 @@ const AdminDashboard = () => {
             onClick={() => setActiveTab('dispatches')}
           >
             Dispatches
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'customers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('customers')}
+          >
+            Customers
           </button>
           <button 
             className={`tab-button ${activeTab === 'materials' ? 'active' : ''}`}
@@ -480,6 +518,57 @@ const AdminDashboard = () => {
           </div>
         )}
 
+        {activeTab === 'customers' && (
+          <div className="entities-container">
+            <div className="entities-header">
+              <h2>Customers Management</h2>
+              <button 
+                className="add-button"
+                onClick={() => openModal('add', 'customer')}
+              >
+                Add Customer
+              </button>
+            </div>
+            <div className="entities-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Contact</th>
+                    <th>Email</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entities.customers.map(customer => (
+                    <tr key={customer.id}>
+                      <td>{customer.name}</td>
+                      <td>{customer.contact}</td>
+                      <td>{customer.email || 'N/A'}</td>
+                      <td>{new Date(customer.created_at).toLocaleDateString()}</td>
+                      <td>
+                        <button 
+                          className="action-button edit"
+                          onClick={() => openModal('edit', 'customer', customer)}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="action-button delete"
+                          onClick={() => deleteEntity('customer', customer)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'dispatches' && (
           <div className="entities-container">
             <div className="entities-header">
@@ -517,6 +606,14 @@ const AdminDashboard = () => {
                       </td>
                       <td>
                         <button 
+                          className="action-button view"
+                          onClick={() => openDispatchDetailsModal(dispatch)}
+                          title="View Details & Images"
+                        >
+                          <Eye size={16} />
+                          Details
+                        </button>
+                        <button 
                           className="action-button edit"
                           onClick={() => openModal('edit', 'dispatch', dispatch)}
                         >
@@ -524,12 +621,9 @@ const AdminDashboard = () => {
                         </button>
                         <button 
                           className="action-button assign"
-                          onClick={() => {
-                            const operatorId = window.prompt('Enter Operator ID to assign:');
-                            if (operatorId) assignDispatchOperator(dispatch.id, operatorId);
-                          }}
+                          onClick={() => openOperatorModal(dispatch)}
                         >
-                          Assign
+                          Assign Operator
                         </button>
                       </td>
                     </tr>
@@ -623,6 +717,209 @@ const AdminDashboard = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Operator Assignment Modal */}
+        {showOperatorModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3>Assign Operator to Dispatch</h3>
+                <button className="modal-close" onClick={closeOperatorModal}>×</button>
+              </div>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Dispatch Details:</label>
+                  <p><strong>Dispatch #{selectedDispatch?.id}</strong></p>
+                  <p>Truck: {selectedDispatch?.truck_number_plate}</p>
+                  <p>Order: {selectedDispatch?.order_material} - {selectedDispatch?.order_quantity} tons</p>
+                  <p>Customer: {selectedDispatch?.order_customer}</p>
+                </div>
+                <div className="form-group">
+                  <label>Select Operator:</label>
+                  <div className="operators-list">
+                    {entities.operators.map(operator => (
+                      <div key={operator.id} className="operator-item">
+                        <div className="operator-info">
+                          <strong>{operator.full_name}</strong>
+                          <small>@{operator.username}</small>
+                        </div>
+                        <button 
+                          className="action-button assign"
+                          onClick={() => assignDispatchOperator(operator.id)}
+                        >
+                          Assign
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="action-button cancel" onClick={closeOperatorModal}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Dispatch Details Modal */}
+        {showDispatchDetailsModal && selectedDispatchDetails && (
+          <div className="modal-overlay">
+            <div className="modal-content large-modal">
+              <div className="modal-header">
+                <h3>Dispatch Details - #{selectedDispatchDetails.id}</h3>
+                <button className="modal-close" onClick={closeDispatchDetailsModal}>×</button>
+              </div>
+              <div className="modal-body">
+                <div className="dispatch-details-grid">
+                  {/* Basic Information */}
+                  <div className="details-section">
+                    <h4>Basic Information</h4>
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <label>Truck:</label>
+                        <span>{selectedDispatchDetails.truck_number_plate}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Driver:</label>
+                        <span>{selectedDispatchDetails.truck_driver}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Order:</label>
+                        <span>#{selectedDispatchDetails.order}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Customer:</label>
+                        <span>{selectedDispatchDetails.order_customer}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Material:</label>
+                        <span>{selectedDispatchDetails.order_material}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Quantity:</label>
+                        <span>{selectedDispatchDetails.order_quantity} tons</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Operator:</label>
+                        <span>{selectedDispatchDetails.operator_name || 'Unassigned'}</span>
+                      </div>
+                      <div className="info-item">
+                        <label>Status:</label>
+                        <span className={`status-badge ${selectedDispatchDetails.status}`}>
+                          {selectedDispatchDetails.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Workflow Timeline */}
+                  <div className="details-section">
+                    <h4>Workflow Timeline</h4>
+                    <div className="timeline">
+                      <div className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <h5>Journey Started</h5>
+                          <p>{selectedDispatchDetails.start_journey_time ? 
+                            new Date(selectedDispatchDetails.start_journey_time).toLocaleString() : 
+                            'Not started'}</p>
+                        </div>
+                      </div>
+                      <div className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <h5>Weigh In</h5>
+                          <p>{selectedDispatchDetails.weigh_in_time ? 
+                            new Date(selectedDispatchDetails.weigh_in_time).toLocaleString() : 
+                            'Not completed'}</p>
+                          {selectedDispatchDetails.gross_weight && (
+                            <p><strong>Gross Weight:</strong> {selectedDispatchDetails.gross_weight} tons</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <h5>Unload</h5>
+                          <p>{selectedDispatchDetails.unload_time ? 
+                            new Date(selectedDispatchDetails.unload_time).toLocaleString() : 
+                            'Not completed'}</p>
+                        </div>
+                      </div>
+                      <div className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <h5>Weigh Out</h5>
+                          <p>{selectedDispatchDetails.weigh_out_time ? 
+                            new Date(selectedDispatchDetails.weigh_out_time).toLocaleString() : 
+                            'Not completed'}</p>
+                          {selectedDispatchDetails.tare_weight && (
+                            <p><strong>Tare Weight:</strong> {selectedDispatchDetails.tare_weight} tons</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="timeline-item">
+                        <div className="timeline-marker"></div>
+                        <div className="timeline-content">
+                          <h5>Completed</h5>
+                          <p>{selectedDispatchDetails.completion_time ? 
+                            new Date(selectedDispatchDetails.completion_time).toLocaleString() : 
+                            'Not completed'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Media Files */}
+                  <div className="details-section">
+                    <h4>Proof Images</h4>
+                    {selectedDispatchDetails.media_files && selectedDispatchDetails.media_files.length > 0 ? (
+                      <div className="media-gallery">
+                        {selectedDispatchDetails.media_files.map((media, index) => (
+                          <div key={index} className="media-item">
+                            <div className="media-header">
+                              <span className="media-type">{media.media_type.replace('_', ' ').toUpperCase()}</span>
+                              <span className="media-date">
+                                {new Date(media.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <div className="media-image">
+                              <img 
+                                src={media.image_url} 
+                                alt={`${media.media_type} proof`}
+                                onClick={() => window.open(media.image_url, '_blank')}
+                              />
+                            </div>
+                            {media.description && (
+                              <div className="media-description">
+                                <p>{media.description}</p>
+                              </div>
+                            )}
+                            <div className="media-footer">
+                              <small>Uploaded by: {media.uploaded_by_name}</small>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="no-media">
+                        <ImageIcon size={48} />
+                        <p>No proof images uploaded yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="action-button cancel" onClick={closeDispatchDetailsModal}>
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -851,6 +1148,21 @@ const AdminDashboard = () => {
               </select>
             </div>
             <div className="form-group">
+              <label>Operator:</label>
+              <select
+                value={formData.operator || ''}
+                onChange={(e) => handleInputChange('operator', parseInt(e.target.value))}
+                className="form-input"
+              >
+                <option value="">Select Operator (Optional)</option>
+                {entities.operators.map(operator => (
+                  <option key={operator.id} value={operator.id}>
+                    {operator.full_name} (@{operator.username})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
               <label>Status:</label>
               <select
                 value={formData.status || 'assigned'}
@@ -858,7 +1170,10 @@ const AdminDashboard = () => {
                 className="form-input"
               >
                 <option value="assigned">Assigned</option>
-                <option value="in_progress">In Progress</option>
+                <option value="in_transit">In Transit</option>
+                <option value="weigh_in">Weigh In</option>
+                <option value="unload">Unload</option>
+                <option value="weigh_out">Weigh Out</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
