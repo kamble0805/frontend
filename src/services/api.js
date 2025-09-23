@@ -1,6 +1,20 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+// Determine API base URL: prefer env, else guess from current origin or Render conventions
+const inferApiBaseUrl = () => {
+  const envUrl = process.env.REACT_APP_API_URL;
+  if (envUrl) return envUrl.replace(/\/$/, '');
+
+  // If the frontend is hosted on the same domain, assume backend under /api
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/api`;
+  }
+
+  // Fallback for local development
+  return 'http://localhost:8000/api';
+};
+
+export const API_BASE_URL = inferApiBaseUrl();
 
 // Create axios instance
 const api = axios.create({
@@ -418,3 +432,20 @@ export const dashboardAPI = {
 };
 
 export default api;
+
+// Helper to build absolute media URLs from backend
+export function resolveMediaUrl(pathOrUrl) {
+  if (!pathOrUrl) return '';
+  try {
+    // Already absolute
+    if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+    // Ensure leading slash for MEDIA_URL-relative paths
+    const normalized = pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`;
+    // If API base is like https://host/api, drop trailing /api to get host origin
+    const apiUrl = new URL(API_BASE_URL);
+    const origin = `${apiUrl.protocol}//${apiUrl.host}`;
+    return `${origin}${normalized}`;
+  } catch {
+    return pathOrUrl;
+  }
+}

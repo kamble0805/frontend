@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI, trucksAPI, customersAPI, ordersAPI, dispatchesAPI, materialsAPI, operatorsAPI } from '../services/api';
+import { resolveMediaUrl } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Truck, Users, Package, AlertTriangle, Clock, TrendingUp, Eye, Image as ImageIcon } from 'lucide-react';
 import './Dashboard.css';
@@ -890,9 +891,9 @@ const AdminDashboard = () => {
                             </div>
                             <div className="media-image">
                               <img 
-                                src={media.image_url} 
+                                src={resolveMediaUrl(media.image_url)} 
                                 alt={`${media.media_type} proof`}
-                                onClick={() => window.open(media.image_url, '_blank')}
+                                onClick={() => window.open(resolveMediaUrl(media.image_url), '_blank')}
                               />
                             </div>
                             {media.description && (
